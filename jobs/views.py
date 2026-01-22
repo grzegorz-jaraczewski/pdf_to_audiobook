@@ -1,14 +1,14 @@
-from django.shortcuts import render
-from django.conf import settings
-import os
+from django.shortcuts import render, redirect, get_object_or_404
+
+from .models import Job
 
 def upload_pdf(request):
-    message = ''
     if request.method == 'POST' and request.FILES.get('pdf_file'):
-        pdf_file = request.FILES['pdf_file']
-        upload_path = os.path.join(settings.MEDIA_ROOT, 'uploads', pdf_file.name)
-        with open(upload_path, 'wb+') as destination:
-            for chunk in pdf_file.chunks():
-                destination.write(chunk)
-        message = f'File "{pdf_file.name}" uploaded successfully.'
-    return render(request, 'jobs/upload.html', {'message': message})
+        job = Job.objects.create(pdf_file=request.FILES['pdf_file'])
+        return redirect('job_detail', job_id=job.id)
+
+    return render(request, 'jobs/upload.html')
+
+def job_detail(request, job_id):
+    job = get_object_or_404(Job, id=job_id)
+    return render(request, 'jobs/job_detail.html', {"job": job})

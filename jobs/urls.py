@@ -3,4 +3,5 @@ from . import views
 
 urlpatterns = [
     path('upload/', views.upload_pdf, name='upload_pdf'),
+    path('job/<int:job_id>/', views.job_detail, name='job_detail')
 ]

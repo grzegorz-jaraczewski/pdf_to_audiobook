@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Upload result</title>
+</head>
+<body>
+    <p>Status: {{ job.status }}</p>
+
+    {% if job.error_message %}
+    <p>Error: {{ job.error_message }}</p>
+    {% endif %}
+</body>
+</html>
