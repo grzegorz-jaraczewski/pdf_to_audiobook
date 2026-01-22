@@ -1,5 +1,8 @@
+from pathlib import Path
 from django.core.management.base import BaseCommand
-from jobs.models import Job
+from jobs.models import Job, Chunk
+from jobs.services.chunker import chunk_text
+from jobs.services.pdf_extractor import extract_text_from_pdf
 
 
 class Command(BaseCommand):
@@ -14,7 +17,18 @@ class Command(BaseCommand):
             job.save()
 
             try:
-                # Placeholder for real processing
+                if not job.chunks.exists():
+                    pdf_path = Path(job.pdf_file.path)
+                    full_text = extract_text_from_pdf(pdf_path)
+                    chunks = chunk_text(full_text)
+
+                    for index, text in chunks:
+                        Chunk.objects.create(
+                            job=job,
+                            index=index,
+                            text=text,
+                        )
+
                 self.stdout.write(f'Job {job.id}: processing complete')
                 job.status = Job.Status.COMPLETED
                 job.save()
