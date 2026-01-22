@@ -1,4 +1,6 @@
 from django.db import models
+from pathlib import Path
+
 
 class Job(models.Model):
     class Status(models.TextChoices):
@@ -67,5 +69,13 @@ class Chunk(models.Model):
         unique_together = ('job', 'index')
         ordering = ['index']
 
+    def chunk_audio_upload_path(instance, filename):
+        return f'audio/job_{instance.job.id}/chunk_{instance.index}.mp3'
+
+    audio_file = models.FileField(upload_to=chunk_audio_upload_path, blank=True)
+
+
     def __str__(self):
         return f'Chunk {self.index} of Job {self.job_id}'
+
+
