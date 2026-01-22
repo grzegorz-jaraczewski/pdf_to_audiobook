@@ -12,28 +12,37 @@ class Command(BaseCommand):
         jobs = Job.objects.filter(status=Job.Status.PENDING)
 
         for job in jobs:
-            self.stdout.write(f'Processing job {job.id}...')
-            job.status = Job.Status.PROCESSING
-            job.save()
+            self.stdout.write(f'Processing Job {job.id}...')
 
-            try:
-                if not job.chunks.exists():
-                    pdf_path = Path(job.pdf_file.path)
-                    full_text = extract_text_from_pdf(pdf_path)
-                    chunks = chunk_text(full_text)
+            if not job.chunks.exists():
+                pdf_path = Path(job.pdf_file.path)
+                full_text = extract_text_from_pdf(pdf_path)
+                chunks = chunk_text(full_text)
 
-                    for index, text in chunks:
-                        Chunk.objects.create(
-                            job=job,
-                            index=index,
-                            text=text,
-                        )
+                for index, text in chunks:
+                    Chunk.objects.create(
+                        job=job,
+                        index=index,
+                        text=text,
+                    )
 
-                self.stdout.write(f'Job {job.id}: processing complete')
-                job.status = Job.Status.COMPLETED
-                job.save()
+            # Process pending chunks
+            pending_chunks = job.chunks.filter(status=Chunk.Status.PENDING)
 
-            except Exception as exc:
-                job.status = Job.Status.FAILED
-                job.error_message = str(exc)
-                job.save()
+            for chunk in pending_chunks:
+                self.stdout.write(f'Processing Chunk {chunk.index} of Job {job.id}...')
+                chunk.status = Chunk.Status.PROCESSING
+                chunk.save()
+
+                try:
+                    # Placeholder for real TTS
+                    chunk.status = Chunk.Status.COMPLETED
+                    chunk.save()
+
+                except Exception as exc:
+                    job.status = Job.Status.FAILED
+                    job.error_message = str(exc)
+                    job.save()
+
+            job.update_status_from_chunks()
+            self.stdout.write(f'Job {job.id}: {pending_chunks.count()} chunks remaining.')

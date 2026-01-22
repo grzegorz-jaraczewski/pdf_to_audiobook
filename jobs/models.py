@@ -18,6 +18,21 @@ class Job(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def update_status_from_chunks(self):
+        total = self.chunks.count()
+        completed = self.chunks.filter(status=Job.Status.COMPLETED).count()
+        failed = self.chunks.filter(status=Job.Status.FAILED).count()
+
+        if completed == total and total > 0:
+            self.status = Job.Status.COMPLETED
+        elif failed > 0 and completed + failed == total:
+            self.status = Job.Status.FAILED
+        else:
+            self.status = Job.Status.PROCESSING
+
+        self.save()
+
+
     def __str__(self):
         return f"Job #{self.id} - {self.status}"
 
