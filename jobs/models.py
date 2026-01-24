@@ -1,5 +1,4 @@
 from django.db import models
-from pathlib import Path
 
 
 class Job(models.Model):
@@ -77,5 +76,3 @@ class Chunk(models.Model):
 
     def __str__(self):
         return f'Chunk {self.index} of Job {self.job_id}'
-
-

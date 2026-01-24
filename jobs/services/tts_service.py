@@ -1,7 +1,7 @@
 from pathlib import Path
 from google.cloud import texttospeech
 
-def synthesize_text_to_file(text: str, output_path: Path, voice_name="en-US-Wavenet-D", speaking_rate=1.0):
+def synthesize_text_to_file(text: str, output_path: Path, voice_name="en-GB-Standard-B", speaking_rate=1.0):
     client = texttospeech.TextToSpeechClient()
 
     synthesis_input = texttospeech.SynthesisInput({'text': text})

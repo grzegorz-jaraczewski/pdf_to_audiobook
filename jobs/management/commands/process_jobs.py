@@ -6,6 +6,7 @@ from jobs.services.audio_assembler import assemble_chunks_to_pdf
 from jobs.services.chunker import chunk_text
 from jobs.services.pdf_extractor import extract_text_from_pdf
 from jobs.services.tts_service import synthesize_text_to_file
+from pdf_to_audiobook import settings
 
 
 class Command(BaseCommand):
@@ -38,10 +39,11 @@ class Command(BaseCommand):
                 chunk.save()
 
                 try:
-                    output_path = Path(chunk.audio_file.field.upload_to(chunk, 'audio.mp3'))
-                    synthesize_text_to_file(chunk.text, output_path)
+                    relative_path = chunk.audio_file.field.upload_to(chunk, 'audio.mp3')
+                    absolute_path = Path(settings.MEDIA_ROOT) / relative_path
+                    synthesize_text_to_file(chunk.text, absolute_path)
 
-                    chunk.audio_file.name = str(output_path.relative_to(Path().resolve()))
+                    chunk.audio_file.name = relative_path
                     chunk.status = Chunk.Status.COMPLETED
                     chunk.save()
 
