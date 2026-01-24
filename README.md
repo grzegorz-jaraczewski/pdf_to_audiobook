@@ -12,11 +12,15 @@ Future phases will include:
 * Resumable processing jobs
 * Export to M4B audiobook format
 
-## Features Implemented (Phase 1)
-* Temporary PDF upload page at /upload/
-* Uploaded PDFs saved to media/uploads/
-* Django environment variables stored in .env
-* Project fully configured to prevent sensitive data from being committed
+## Features Implemented (Phase 1 - Completed)
+- Upload PDF files through the Django admin interface
+- Automatic text extraction from PDF
+- Text chunking for TTS processing
+- Google Cloud TTS integration (supports large PDFs, resumable jobs)
+- Audio chunks saved under `media/audio/job_<id>/`
+- Resumable jobs after failure
+- Audiobooks generated in **M4B format**
+- Simple admin view of jobs and chunks with status tracking
 
 ## Project Structure
 ```
@@ -86,11 +90,14 @@ http://127.0.0.1:8000/upload/
 * Phase 2 will implement job tracking, resumable processing, and TTS conversion.
 
 ## Next Steps (Phase 2)
-* Design Job & State models to track PDF-to-audiobook conversions
-* Implement chunked processing for long PDFs
-* Integrate Google Cloud TTS
-* Generate M4B audiobook files for download
-* Resume failed conversions without restarting from the beginning
+Planned improvements include:
+- Retry failed chunks
+- Parallel chunk processing
+- Drag-and-drop uploads
+- Multiple voices/languages
+- Metadata support for audiobooks
+- Web API for automated uploads
+- Dockerization and tests
 
 ## License
 This is a personal project, use and modify as desired. Keep API credentials private.
