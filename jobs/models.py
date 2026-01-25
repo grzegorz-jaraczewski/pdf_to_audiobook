@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils import timezone
+from google.api_core.retry import retry_target
 
 
 class Job(models.Model):
@@ -72,6 +73,8 @@ class Chunk(models.Model):
     started_at = models.DateTimeField(auto_now_add=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    retry_count = models.PositiveIntegerField(default=0, null=False, blank=False)
+    max_retries = models.PositiveIntegerField(default=3, null=False, blank=False)
 
     class Meta:
         unique_together = ('job', 'index')
@@ -118,17 +121,24 @@ class Chunk(models.Model):
         Transition chunk from PROCESSING to FAILED.
         Requires an error message explaining the failure.
         """
-        if self.status != self.Status.PROCESSING:
-            raise ValueError(
-                f"Cannot mark Chunk {self.id} as FAILED from status {self.status}."
-            )
-        if not error_message:
-            raise ValueError(
-                f"Cannot mark Chunk {self.id} as FAILED without an error message {self.error_message}."
-            )
-        self.status = self.Status.FAILED
-        self.error_message = error_message
-        self.save(update_fields=["status", "error_message", "updated_at", "audio_file"])
+        self.retry_count += 1
+
+        if self.retry_count < self.max_retries:
+            if self.status != self.Status.PROCESSING:
+                raise ValueError(
+                    f"Cannot mark Chunk {self.id} as FAILED from status {self.status}."
+                )
+            self.status = self.Status.PENDING
+            self.error_message = ""
+        else:
+            if not error_message:
+                raise ValueError(
+                    f"Cannot mark Chunk {self.id} as FAILED without an error message {self.error_message}."
+                )
+            self.status = self.Status.FAILED
+            self.error_message = error_message
+
+        self.save(update_fields=["status", "error_message", "updated_at", "audio_file", "retry_count"])
 
     def __str__(self):
         return f'Chunk {self.index} of Job {self.job_id}'
