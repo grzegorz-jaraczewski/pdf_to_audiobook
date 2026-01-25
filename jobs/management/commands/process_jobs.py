@@ -1,5 +1,7 @@
+from datetime import timedelta
 from pathlib import Path
 from django.core.management.base import BaseCommand
+from django.utils import timezone
 from jobs.models import Job, Chunk
 from jobs.services.audio_assembler import assemble_chunks_to_pdf
 from jobs.services.chunker import chunk_text
@@ -17,6 +19,12 @@ class Command(BaseCommand):
         for job in jobs:
             self.stdout.write(f'Processing Job {job.id}...')
 
+            # Check stuck chunks
+            job.chunks.filter(
+                status=Chunk.Status.PROCESSING,
+                started_at__lt=timezone.now() - timedelta(minutes=1)
+            ).update(status=Chunk.Status.PENDING)
+
             if not job.chunks.exists():
                 pdf_path = Path(job.pdf_file.path)
                 full_text = extract_text_from_pdf(pdf_path)
@@ -33,6 +41,10 @@ class Command(BaseCommand):
             pending_chunks = job.chunks.filter(status=Chunk.Status.PENDING)
 
             for chunk in pending_chunks:
+                if chunk.audio_file:
+                    chunk.mark_completed()
+                    continue
+
                 self.stdout.write(f'Processing Chunk {chunk.index} of Job {job.id}...')
                 chunk.mark_processing()
 
@@ -49,7 +61,8 @@ class Command(BaseCommand):
 
             job.update_status_from_chunks()
 
-            if job.status == Job.Status.COMPLETED:
-                assemble_chunks_to_pdf(job.id, job.chunks.all())
+            completed_chunks = job.chunks.filter(status=Chunk.Status.COMPLETED)
+            if job.status == Job.Status.COMPLETED and all(c.audio_file for c in completed_chunks):
+                assemble_chunks_to_pdf(job.id, completed_chunks)
             else:
                 continue

@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 
 class Job(models.Model):
@@ -68,6 +69,7 @@ class Chunk(models.Model):
         default=Status.PENDING
     )
     error_message = models.TextField(blank=True)
+    started_at = models.DateTimeField(auto_now_add=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -90,7 +92,8 @@ class Chunk(models.Model):
             )
         self.status = self.Status.PROCESSING
         self.error_message = ""
-        self.save(update_fields=["status", "error_message", "updated_at"])
+        self.started_at = timezone.now()
+        self.save(update_fields=["status", "error_message", "started_at", "updated_at"])
 
     def mark_completed(self):
         """
@@ -125,7 +128,7 @@ class Chunk(models.Model):
             )
         self.status = self.Status.FAILED
         self.error_message = error_message
-        self.save(update_fields=["status", "error_message", "updated_at"])
+        self.save(update_fields=["status", "error_message", "updated_at", "audio_file"])
 
     def __str__(self):
         return f'Chunk {self.index} of Job {self.job_id}'
