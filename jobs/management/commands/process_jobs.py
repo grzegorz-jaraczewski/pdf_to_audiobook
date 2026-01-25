@@ -1,6 +1,5 @@
 from pathlib import Path
 from django.core.management.base import BaseCommand
-from django.db.models import Q
 from jobs.models import Job, Chunk
 from jobs.services.audio_assembler import assemble_chunks_to_pdf
 from jobs.services.chunker import chunk_text
@@ -35,8 +34,7 @@ class Command(BaseCommand):
 
             for chunk in pending_chunks:
                 self.stdout.write(f'Processing Chunk {chunk.index} of Job {job.id}...')
-                chunk.status = Chunk.Status.PROCESSING
-                chunk.save()
+                chunk.mark_processing()
 
                 try:
                     relative_path = chunk.audio_file.field.upload_to(chunk, 'audio.mp3')
@@ -44,34 +42,14 @@ class Command(BaseCommand):
                     synthesize_text_to_file(chunk.text, absolute_path)
 
                     chunk.audio_file.name = relative_path
-                    chunk.status = Chunk.Status.COMPLETED
-                    chunk.save()
+                    chunk.mark_completed()
 
                 except Exception as exc:
-                    chunk.status = Chunk.Status.FAILED
-                    chunk.error_message = str(exc)
-                    chunk.save()
+                    chunk.mark_failed(str(exc))
 
             job.update_status_from_chunks()
-            self.stdout.write(f'Job {job.id}: {pending_chunks.count()} chunks remaining.')
 
-            failed_chunk = job.chunks.filter(status=Chunk.Status.FAILED).first()
-            if failed_chunk:
-                job.status = Job.Status.FAILED
-                job.error_message = (
-                    f'Chunk {failed_chunk.index} failed: {failed_chunk.error_message}'
-                )
-                job.save()
-
-            if job.chunks.filter(status=Chunk.Status.PENDING).exists():
-                return # not ready
-
-            if job.chunks.filter(status=Chunk.Status.FAILED).exists():
-                return # already handled above
-
-            if job.chunks.filter(Q(audio_file__isnull=True) | Q(audio_file="")).exists():
-                return # safety
-
-            assemble_chunks_to_pdf(job.id, job.chunks.all())
-            job.status = Job.Status.COMPLETED
-            job.save()
+            if job.status == Job.Status.COMPLETED:
+                assemble_chunks_to_pdf(job.id, job.chunks.all())
+            else:
+                continue

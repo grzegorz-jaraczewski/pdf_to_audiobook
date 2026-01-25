@@ -14,25 +14,33 @@ class Job(models.Model):
         choices=Status.choices,
         default=Status.PENDING,
     )
-
     error_message = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def update_status_from_chunks(self):
         total = self.chunks.count()
-        completed = self.chunks.filter(status=Job.Status.COMPLETED).count()
-        failed = self.chunks.filter(status=Job.Status.FAILED).count()
+        completed = self.chunks.filter(status=Chunk.Status.COMPLETED).count()
+        failed = self.chunks.filter(status=Chunk.Status.FAILED)
 
-        if completed == total and total > 0:
-            self.status = Job.Status.COMPLETED
-        elif failed > 0 and completed + failed == total:
-            self.status = Job.Status.FAILED
+        if total == 0:
+            self.status = self.Status.PENDING
+            self.error_message = ""
+
+        elif failed.exists() > 0:
+            self.status = self.Status.FAILED
+            self.error_message = failed.order_by('index').first().error_message
+
+        elif completed == total:
+            self.status = self.Status.COMPLETED
+            self.error_message = ""
+
         else:
-            self.status = Job.Status.PROCESSING
+            self.status = self.Status.PROCESSING
+            self.error_message = ""
 
         self.save()
-
+        return
 
     def __str__(self):
         return f"Job #{self.id} - {self.status}"
@@ -57,9 +65,8 @@ class Chunk(models.Model):
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
-        default=Status.PENDING,
+        default=Status.PENDING
     )
-
     error_message = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -73,6 +80,52 @@ class Chunk(models.Model):
 
     audio_file = models.FileField(upload_to=chunk_audio_upload_path, blank=True)
 
+    def mark_processing(self):
+        """
+        Transition chunk from PENDING to PROCESSING.
+        """
+        if self.status != self.Status.PENDING:
+            raise ValueError(
+                f"Cannot mark Chunk {self.id} as PROCESSING from status {self.status}."
+            )
+        self.status = self.Status.PROCESSING
+        self.error_message = ""
+        self.save(update_fields=["status", "error_message", "updated_at"])
+
+    def mark_completed(self):
+        """
+        Transition chunk from PROCESSING to COMPLETED.
+        Requires a valid audio_file.
+        """
+        if self.status != self.Status.PROCESSING:
+            raise ValueError(
+                f"Cannot mark Chunk {self.id} as COMPLETED from status {self.status}."
+            )
+
+        if not self.audio_file:
+            raise ValueError(
+                f"Cannot mark Chunk {self.id} as COMPLETED without audio_file."
+            )
+        self.status = self.Status.COMPLETED
+        self.error_message = ""
+        self.save(update_fields=["status", "error_message", "updated_at", "audio_file"])
+
+    def mark_failed(self, error_message: str):
+        """
+        Transition chunk from PROCESSING to FAILED.
+        Requires an error message explaining the failure.
+        """
+        if self.status != self.Status.PROCESSING:
+            raise ValueError(
+                f"Cannot mark Chunk {self.id} as FAILED from status {self.status}."
+            )
+        if not error_message:
+            raise ValueError(
+                f"Cannot mark Chunk {self.id} as FAILED without an error message {self.error_message}."
+            )
+        self.status = self.Status.FAILED
+        self.error_message = error_message
+        self.save(update_fields=["status", "error_message", "updated_at"])
 
     def __str__(self):
         return f'Chunk {self.index} of Job {self.job_id}'
