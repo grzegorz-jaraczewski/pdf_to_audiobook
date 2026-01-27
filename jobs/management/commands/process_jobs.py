@@ -1,7 +1,6 @@
-from datetime import timedelta
 from pathlib import Path
 from django.core.management.base import BaseCommand
-from django.utils import timezone
+from django.db.models import Q
 from jobs.models import Job, Chunk
 from jobs.services.audio_assembler import assemble_chunks_to_pdf
 from jobs.services.chunker import chunk_text
@@ -14,16 +13,20 @@ class Command(BaseCommand):
     help = 'Process pending PDF-to-audiobook jobs'
 
     def handle(self, *args, **options):
-        jobs = Job.objects.filter(status=Job.Status.PENDING)
+        recovered_job_ids = Chunk.recover_stuck_chunks()
+        if recovered_job_ids:
+            print(f"Recovered chunks from jobs: {recovered_job_ids}")
+
+        for job_id in recovered_job_ids:
+            job = Job.objects.get(id=job_id)
+            job.update_status_from_chunks()
+
+        jobs = Job.objects.filter(
+            Q(status=Job.Status.PENDING) | Q(status=Job.Status.PROCESSING)
+        )
 
         for job in jobs:
             self.stdout.write(f'Processing Job {job.id}...')
-
-            # Check stuck chunks
-            job.chunks.filter(
-                status=Chunk.Status.PROCESSING,
-                started_at__lt=timezone.now() - timedelta(minutes=1)
-            ).update(status=Chunk.Status.PENDING)
 
             if not job.chunks.exists():
                 pdf_path = Path(job.pdf_file.path)

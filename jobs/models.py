@@ -1,6 +1,7 @@
+from datetime import timedelta
+
 from django.db import models
 from django.utils import timezone
-from google.api_core.retry import retry_target
 
 
 class Job(models.Model):
@@ -63,7 +64,6 @@ class Chunk(models.Model):
 
     index = models.PositiveIntegerField()
     text = models.TextField()
-
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
@@ -139,6 +139,31 @@ class Chunk(models.Model):
             self.error_message = error_message
 
         self.save(update_fields=["status", "error_message", "updated_at", "audio_file", "retry_count"])
+
+    @classmethod
+    def recover_stuck_chunks(cls, timeout: timedelta = timedelta(minutes=1)):
+        job_ids = set()
+
+        stuck_chunks = cls.objects.filter(
+            status=cls.Status.PROCESSING,
+            started_at__lt=timezone.now() - timeout,
+        )
+
+        for chunk in stuck_chunks:
+            job_id = chunk.job.id
+            chunk.retry_count += 1
+            if chunk.retry_count < chunk.max_retries:
+                chunk.status = cls.Status.PENDING
+            else:
+                chunk.status = cls.Status.FAILED
+                chunk.error_message = f"Cannot recover Chunk {chunk.id}. Last error: {chunk.error_message or 'None'}"
+
+            chunk.save(update_fields=["status", "error_message", "updated_at", "retry_count"])
+            job_ids.add(job_id)
+            print(f"Recovered Chunk {chunk.id} of Job {job_id}")
+
+        return job_ids
+
 
     def __str__(self):
         return f'Chunk {self.index} of Job {self.job_id}'
