@@ -14,11 +14,8 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         recovered_job_ids = Chunk.recover_stuck_chunks()
-        if recovered_job_ids:
-            print(f"Recovered chunks from jobs: {recovered_job_ids}")
-
-        for job_id in recovered_job_ids:
-            job = Job.objects.get(id=job_id)
+        recovered_jobs = Job.objects.filter(id__in=recovered_job_ids)
+        for job in recovered_jobs:
             job.update_status_from_chunks()
 
         jobs = Job.objects.filter(
@@ -40,12 +37,8 @@ class Command(BaseCommand):
                         text=text,
                     )
 
-            # Process pending chunks
-            pending_chunks = job.chunks.filter(status=Chunk.Status.PENDING)
-
-            for chunk in pending_chunks:
-                if chunk.audio_file:
-                    chunk.mark_completed()
+            for chunk in job.chunks.all():
+                if not chunk.is_runnable():
                     continue
 
                 self.stdout.write(f'Processing Chunk {chunk.index} of Job {job.id}...')
