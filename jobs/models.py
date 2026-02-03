@@ -168,11 +168,6 @@ class Chunk(models.Model):
 
         self.save(update_fields=["status", "error_message", "updated_at", "audio_file", "retry_count"])
 
-    def is_runnable(self) -> bool:
-        return (self.status == self.Status.PENDING
-                and not self.audio_file
-                and self.retry_count < self.max_retries)
-
     @classmethod
     def recover_stuck_chunks(cls, timeout: timedelta = timedelta(minutes=1)):
         job_ids = set()
