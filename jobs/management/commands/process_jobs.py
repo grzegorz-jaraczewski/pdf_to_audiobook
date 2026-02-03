@@ -56,9 +56,7 @@ class Command(BaseCommand):
                     chunk.mark_failed(str(exc))
 
             job.update_status_from_chunks()
-
-            completed_chunks = job.chunks.filter(status=Chunk.Status.COMPLETED)
-            if job.status == Job.Status.COMPLETED and all(c.audio_file for c in completed_chunks):
-                assemble_chunks_to_pdf(job.id, completed_chunks)
-            else:
-                continue
+            try:
+                job.assemble()
+            except RuntimeError as exc:
+                self.stdout.write(f"Job {job.id} not ready for assembly")

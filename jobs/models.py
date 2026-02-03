@@ -1,7 +1,9 @@
 from datetime import timedelta
 
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
+
+from jobs.services.audio_assembler import assemble_chunks_to_pdf
 
 
 class Job(models.Model):
@@ -20,6 +22,7 @@ class Job(models.Model):
     error_message = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    assembled_at = models.DateTimeField(null=True, blank=True)
 
     def update_status_from_chunks(self):
         total = self.chunks.count()
@@ -30,7 +33,7 @@ class Job(models.Model):
             self.status = self.Status.PENDING
             self.error_message = ""
 
-        elif failed.exists() > 0:
+        elif failed.exists():
             self.status = self.Status.FAILED
             self.error_message = failed.order_by('index').first().error_message
 
@@ -44,6 +47,26 @@ class Job(models.Model):
 
         self.save()
         return
+
+    def can_assemble(self):
+        if self.assembled_at is not None:
+            return False
+        if not self.chunks.exists():
+            return False
+
+        return not self.chunks.exclude(status=Chunk.Status.COMPLETED).exists()
+
+    def assemble(self):
+        if not self.can_assemble():
+            raise RuntimeError(f"Job {self.id} cannot be assembled: chunks not ready")
+
+        with transaction.atomic():
+            self.status = self.Status.COMPLETED
+            self.assembled_at = timezone.now()
+            self.save(update_fields=['status', 'assembled_at'])
+
+        completed_chunks = self.chunks.filter(status=Chunk.Status.COMPLETED).order_by("index")
+        assemble_chunks_to_pdf(self.id, completed_chunks)
 
     def __str__(self):
         return f"Job #{self.id} - {self.status}"
