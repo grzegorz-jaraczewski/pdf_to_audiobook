@@ -1,5 +1,6 @@
 from pathlib import Path
 from django.core.management.base import BaseCommand
+from django.db import transaction
 from django.db.models import Q
 from jobs.models import Job, Chunk
 from jobs.services.audio_assembler import assemble_chunks_to_pdf
@@ -37,12 +38,15 @@ class Command(BaseCommand):
                         text=text,
                     )
 
-            for chunk in job.chunks.all():
-                if not chunk.is_runnable():
-                    continue
+            while True:
+                with transaction.atomic():
+                    chunk = Chunk.claim_next_chunk(job)
+                    if not chunk:
+                        break
+
+                    chunk.mark_processing()
 
                 self.stdout.write(f'Processing Chunk {chunk.index} of Job {job.id}...')
-                chunk.mark_processing()
 
                 try:
                     relative_path = chunk.audio_file.field.upload_to(chunk, 'audio.mp3')
