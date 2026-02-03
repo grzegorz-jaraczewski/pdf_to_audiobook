@@ -192,6 +192,18 @@ class Chunk(models.Model):
 
         return job_ids
 
+    @classmethod
+    def claim_next_chunk(cls, job):
+        return (
+            cls.objects.select_for_update(
+                skip_locked=True
+            ).filter(
+                job=job,
+                status=cls.Status.PENDING,
+                retry_count__lt=models.F("retry_count"),
+            ).order_by("index").first()
+        )
+
 
     def __str__(self):
         return f'Chunk {self.index} of Job {self.job_id}'
