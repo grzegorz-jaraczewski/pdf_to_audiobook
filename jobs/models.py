@@ -200,7 +200,7 @@ class Chunk(models.Model):
             ).filter(
                 job=job,
                 status=cls.Status.PENDING,
-                retry_count__lt=models.F("retry_count"),
+                retry_count__lt=models.F("max_retries"),
             ).order_by("index").first()
         )
 

@@ -42,6 +42,7 @@ class Command(BaseCommand):
                 with transaction.atomic():
                     chunk = Chunk.claim_next_chunk(job)
                     if not chunk:
+                        print("Done")
                         break
 
                     chunk.mark_processing()
