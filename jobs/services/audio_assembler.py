@@ -3,6 +3,19 @@ from pydub import AudioSegment
 from io import BytesIO
 
 def assemble_chunks_to_pdf(job_id: int, chunks):
+    """
+    Combine a list of audio chunks into a single audiobook file in M4B format.
+
+    The chunks are concatenated in the order of their `index` attribute.
+    The resulting audiobook is saved to `media/audio/job_<job_id>/audiobook.m4b`.
+
+    Args:
+        job_id (int): Unique identifier for the job, used to create the output path.
+        chunks (QuerySet): Iterable of chunk objects, each with an `audio_file` attribute.
+
+    Returns:
+        Path: Path object pointing to the generated M4B audiobook file.
+    """
     output_path = Path(f'media/audio/job_{job_id}/audiobook.m4b')
     combined = AudioSegment.empty()
 

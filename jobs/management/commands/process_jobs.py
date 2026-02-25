@@ -11,9 +11,30 @@ from jobs.services.tts_service import synthesize_text_to_bytes
 
 
 class Command(BaseCommand):
+    """
+    Orchestrates the PDF-to-audiobook processing pipeline.
+
+    - Recovers stuck chunks
+    - Processes pending/active jobs
+    - Generates chunk audio via TTS
+    - Persists audio using storage backend
+    - Triggers final job assembly
+
+    Designed to be idempotent and concurrency-safe.
+    """
     help = 'Process pending PDF-to-audiobook jobs'
 
     def handle(self, *args, **options):
+        """
+        Execute the processing loop:
+
+        1. Recover and normalize previously stuck chunks.
+        2. Ensure chunks exist for each job.
+        3. Atomically claim and process chunks.
+        4. Update job status and assemble final output when ready.
+
+        Safe to run repeatedly and across multiple workers.
+        """
         recovered_job_ids = Chunk.recover_stuck_chunks()
         recovered_jobs = Job.objects.filter(id__in=recovered_job_ids)
         for job in recovered_jobs:
