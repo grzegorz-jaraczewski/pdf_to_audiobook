@@ -1,13 +1,13 @@
 from pathlib import Path
+
+from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.db.models import Q
 from jobs.models import Job, Chunk
-from jobs.services.audio_assembler import assemble_chunks_to_pdf
 from jobs.services.chunker import chunk_text
 from jobs.services.pdf_extractor import extract_text_from_pdf
-from jobs.services.tts_service import synthesize_text_to_file
-from pdf_to_audiobook import settings
+from jobs.services.tts_service import synthesize_text_to_bytes
 
 
 class Command(BaseCommand):
@@ -50,11 +50,13 @@ class Command(BaseCommand):
                 self.stdout.write(f'Processing Chunk {chunk.index} of Job {job.id}...')
 
                 try:
-                    relative_path = chunk.audio_file.field.upload_to(chunk, 'audio.mp3')
-                    absolute_path = Path(settings.MEDIA_ROOT) / relative_path
-                    synthesize_text_to_file(chunk.text, absolute_path)
+                    audio_bytes = synthesize_text_to_bytes(chunk.text)
 
-                    chunk.audio_file.name = relative_path
+                    chunk.audio_file.save(
+                        f"chunk_{chunk.index}.mp3",
+                        ContentFile(audio_bytes),
+                        save=False,
+                    )
                     chunk.mark_completed()
 
                 except Exception as exc:

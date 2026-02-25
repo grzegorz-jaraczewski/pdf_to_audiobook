@@ -1,9 +1,10 @@
 from datetime import timedelta
 
+from django.core.files.base import ContentFile
 from django.db import models, transaction
 from django.utils import timezone
 
-from jobs.services.audio_assembler import assemble_chunks_to_pdf
+from jobs.services.audio_assembler import merge_mp3_chunks
 
 
 class Job(models.Model):
@@ -23,6 +24,7 @@ class Job(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     assembled_at = models.DateTimeField(null=True, blank=True)
+    output_file = models.FileField(upload_to='audio/jobs/%Y/%m/%d/', null=True, blank=True)
 
     def update_status_from_chunks(self):
         total = self.chunks.count()
@@ -58,20 +60,28 @@ class Job(models.Model):
 
     def assemble(self):
         with transaction.atomic():
-            self.refresh_from_db()
+            job = Job.objects.select_for_update().get(pk=self.pk)
 
-            if self.assembled_at is not None:
+            if job.output_file:
                 return
 
-            if not self.can_assemble():
+            if job.assembled_at is not None:
                 return
 
-            completed_chunks = self.chunks.filter(status=Chunk.Status.COMPLETED).order_by("index")
-            assemble_chunks_to_pdf(self.id, completed_chunks)
+            if not job.can_assemble():
+                return
 
-            self.status = self.Status.COMPLETED
-            self.assembled_at = timezone.now()
-            self.save(update_fields=['status', 'assembled_at'])
+            completed_chunks = job.chunks.filter(status=Chunk.Status.COMPLETED).order_by("index")
+            audio_bytes = merge_mp3_chunks(completed_chunks)
+
+            job.output_file.save(
+                f"job_{job.id}.mp3",
+                ContentFile(audio_bytes),
+                save=False,
+            )
+            job.status = job.Status.COMPLETED
+            job.assembled_at = timezone.now()
+            job.save(update_fields=['status', 'assembled_at', 'output_file'])
 
     def __str__(self):
         return f"Job #{self.id} - {self.status}"
@@ -98,20 +108,25 @@ class Chunk(models.Model):
         default=Status.PENDING
     )
     error_message = models.TextField(blank=True)
-    started_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     retry_count = models.PositiveIntegerField(default=0, null=False, blank=False)
     max_retries = models.PositiveIntegerField(default=3, null=False, blank=False)
+    audio_file = models.FileField(upload_to="audio/chunks/%Y/%m/%d/", null=True, blank=True)
 
     class Meta:
-        unique_together = ('job', 'index')
+        constraints = [
+            models.UniqueConstraint(fields=["job", "index"], name="unique_chunk_per_job")
+        ]
         ordering = ['index']
+        indexes = [
+            models.Index(fields=["job", "status"]),
+            models.Index(fields=["job", "index"])
+        ]
 
     def chunk_audio_upload_path(instance, filename):
         return f'audio/job_{instance.job.id}/chunk_{instance.index}.mp3'
-
-    audio_file = models.FileField(upload_to=chunk_audio_upload_path, blank=True)
 
     def mark_processing(self):
         """
