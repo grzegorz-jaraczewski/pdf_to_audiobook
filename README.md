@@ -1,26 +1,50 @@
 # PDF to Audiobook Converter
 ## Overview
-This is a personal web tool to convert PDF documents into audiobooks.
-Currently, the project supports:
-* Uploading PDFs via a web interface
-* Saving uploaded files to a local media/uploads/ folder
-* Environment configuration via .env for safe storage of secrets (Django secret key, Google Cloud credentials)
+PDF to Audiobook Converter is a Django-based backend system that converts PDF documents 
+into fully assembled audiobooks using Google Cloud Text-to-Speech.
 
-Future phases will include:
-* Text-to-Speech conversion using Google Cloud TTS
-* Handling large PDFs and long audiobooks
-* Resumable processing jobs
-* Export to M4B audiobook format
+The system is designed with:
+* Persistent job and chunk storage
+* Concurrency-safe processing
+* Crash recovery and resumability
+* Idempotent audio assembly
+* Storage-backed media handling
 
-## Features Implemented (Phase 1 - Completed)
-- Upload PDF files through the Django admin interface
-- Automatic text extraction from PDF
-- Text chunking for TTS processing
-- Google Cloud TTS integration (supports large PDFs, resumable jobs)
-- Audio chunks saved under `media/audio/job_<id>/`
-- Resumable jobs after failure
-- Audiobooks generated in **M4B format**
-- Simple admin view of jobs and chunks with status tracking
+This project demonstrates a production-style background processing architecture built 
+with Django ORM and transactional guarantees.
+
+## Core Architecture
+The system processes PDFs using a multi-stage pipeline:
+- PDF upload
+- Text extraction
+- Text chunking
+- Chunk-level TTS synthesis
+- Persistent storage of chunk audio
+- Atomic final audio assembly
+
+Each processing unit is represented by:
+* Job - represents a full PDF-to-audiobook conversion
+* Chunk - represents a portion of text processed independently
+
+The design ensures:
+* Safe concurrent workers via ```select_for_update(skip_locked=True)```
+* Retry logic with bounded ```max_retries```
+* Recovery of stuck processing tasks
+* Idempotent job assembly
+* Crash-safe resume capability
+
+## Implemented features
+* PDF upload via Django
+* Automatic PDF text extraction
+* Deterministic text chunking
+* Google Cloud Text-to-Speech integration
+* Chunk-level audio persistence
+* Retry mechanism with failure handling
+* Recovery of stuck chunks
+* Transaction-safe chunk claiming
+* Atomic final MP4 assembly
+* Status tracking (Pending, Processing, Completed, Failed)
+* Concurrency-safe processing pipeline
 
 ## Project Structure
 ```
@@ -30,10 +54,20 @@ pdf_to_audiobook/
 │   ├── settings.py
 │   └── urls.py
 ├── jobs/
-│   ├── views.py
+│   ├── services/
+│   │   ├── audio_assembler.py
+│   │   ├── chunker.py
+│   │   ├── pdf_extractor.py
+│   │   └── tts_service.py
+│   ├── templates/jobs/upload.html
+│   ├── admin.py    
+│   ├── models.py   
 │   ├── urls.py
-│   └── templates/jobs/upload.html
+│   └── views.py
 ├── media/
+│   ├── audio/
+│   ├── intermediate/
+│   ├── output/
 │   └── uploads/
 ├── .env
 ├── .gitignore
@@ -60,7 +94,7 @@ google-credentials.json
 ```
 
 ## Dependency Management (uv)
-This project uses uv instead of pip.
+This project uses uv for dependency management.
 1. Create and activate virtual environment
 ```aiignore
 uv venv
@@ -68,9 +102,8 @@ source .venv/bin/activate
 ```
 2. Install dependencies
 ```aiignore
-uv pip install django python-dotenv
+uv add django python-dotenv google-cloud-texttospeech
 ```
-Additional dependencies will be added in later phases.
 
 ## Running the Project
 1. Start the Django development server:
@@ -83,21 +116,25 @@ http://127.0.0.1:8000/upload/
 ```
 3. Upload a PDF file to test the upload flow. Files will appear under media/uploads/.
 
-## Notes / Best Practices
-* Keep google-credentials.json secure; never commit it to git.
-* Use absolute paths for GOOGLE_APPLICATION_CREDENTIALS and MEDIA_ROOT.
-* The current upload page is temporary and intended for infrastructure testing only.
-* Phase 2 will implement job tracking, resumable processing, and TTS conversion.
+## Design Principles Demonstrated
+* Idempotent operations
+* Transactional integrity
+* Concurrency control with row-level locking
+* Crash recovery
+* Persistent media storage
+* Clear separation of orchestration and services
+* Deterministic state transitions
 
-## Next Steps (Phase 2)
-Planned improvements include:
-- Retry failed chunks
-- Parallel chunk processing
-- Drag-and-drop uploads
-- Multiple voices/languages
-- Metadata support for audiobooks
-- Web API for automated uploads
-- Dockerization and tests
+## Project Status
+This project is considered feature-complete as a backend processing system.
+It serves as:
+* A learning project for advanced Django architecture
+* A reference implementation of transactional background processing
+* A foundation for future API or UI expansion
+
+No further development is currently planned.
 
 ## License
-This is a personal project, use and modify as desired. Keep API credentials private.
+Personal project.
+Use and modify as needed.
+Keep API credentials private.
